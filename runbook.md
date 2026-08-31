@@ -5,33 +5,33 @@
 - The provider name appears to be **VoIP.ms**, not `void.ms`.
 - The requested point of presence (POP) is Houston 2, whose SIP server is
   `houston2.voip.ms`.
+- The account has four inbound phone numbers (DIDs).
+- The cloud PBX is the PBX functionality hosted by VoIP.ms.
+- A call to any of the four DIDs should ring every physical phone together.
 - Polycom SoundPoint IP550 phones can be configured manually for VoIP.ms.
 - The IP550 is not listed in VoIP.ms's current automatic-provisioning device
   list.
 
-This runbook assumes "cloud PBX" means the PBX features built into VoIP.ms.
-If a separate PBX product is involved, stop before configuring a phone. The
-phones would normally register to that PBX instead of directly to VoIP.ms.
+## Confirmed call flow
 
-## Three facts to confirm
-
-1. Does "four lines" mean four phone numbers (DIDs), four physical IP550
-   phones, or four line keys on one phone?
-2. Is the cloud PBX VoIP.ms itself, or a separate product such as 3CX,
-   FreePBX, or another hosted provider?
-3. For incoming calls, should each number ring one phone, should a main number
-   ring every phone, or should callers hear an IVR menu?
+```text
+DID 1 --\
+DID 2 ---\
+DID 3 ----> "All Phones" ring group --> every phone subaccount
+DID 4 ---/
+```
 
 Do not send account or SIP passwords in chat, screenshots, or this repository.
 
 ## Recommended architecture
 
-For four physical phones registered directly to VoIP.ms, create one unique
-SIP subaccount per phone. Do not reuse one subaccount on several phones.
-Register all phones to `houston2.voip.ms`, and set every incoming DID's POP to
-the same Houston 2 server.
+Create one unique SIP subaccount for each physical phone registered directly
+to VoIP.ms. Do not reuse one subaccount on several phones. Register every phone
+to `houston2.voip.ms`, and set all four incoming DIDs' POP to the same Houston
+2 server. Route all four DIDs to one ring group containing every phone's
+subaccount.
 
-A simple extension plan is:
+The first four entries in a simple extension plan could be:
 
 | Phone | Subaccount suffix | Value entered for extension | Dialed extension |
 | --- | --- | ---: | ---: |
@@ -41,7 +41,11 @@ A simple extension plan is:
 | Phone 4 | `phone4` | 4 | 104 |
 
 VoIP.ms adds the leading `10` to the value entered in its Internal Extension
-field. Test this plan with one phone before creating the other three.
+field. Test this plan with one phone before creating the remaining accounts.
+
+A VoIP.ms ring group supports up to eight SIP members. If there are more than
+eight physical phones, stop before creating the group and redesign the call
+distribution.
 
 ## Phase 1: inventory one pilot phone
 
@@ -113,7 +117,8 @@ Exact labels vary by firmware. In the phone's web interface:
    in both directions.
 3. Place a normal outbound call and confirm audio in both directions and the
    displayed caller ID.
-4. For one test DID, open `DID Numbers > Manage DIDs > Edit DID`:
+4. Temporarily use one DID for the pilot test. Open
+   `DID Numbers > Manage DIDs > Edit DID`:
    - set its POP to Houston 2;
    - route it directly to the pilot subaccount; and
    - save and apply the changes at the bottom of the page.
@@ -123,21 +128,60 @@ Exact labels vary by firmware. In the phone's web interface:
    address and make the subaccount's caller ID exactly match the enabled DID.
    Test with `1-555-555-0911`; do **not** place a test call to 911.
 
-## Phase 5: add the remaining phones and call flow
+## Phase 5: add the remaining phones
 
-Once the pilot passes every test, repeat Phases 1 through 4 with a unique
-subaccount and password for each physical phone.
+Once the pilot passes every test, repeat Phases 1 through 3 with a unique
+subaccount, extension, and password for each physical phone. For each phone,
+confirm portal registration, echo-test audio, and outbound calling. Do not
+route a separate DID directly to each phone.
 
-Then choose one incoming design:
+## Phase 6: create the All Phones ring group
 
-- One DID per phone: route each DID directly to its phone's subaccount.
-- One main number rings several phones: create a ring group containing the
-  desired subaccounts, then route the DID to that ring group.
-- Menu-driven routing: create destinations first, then an IVR, and route the
-  main DID to the IVR.
+In the VoIP.ms portal:
 
-All ring-group members and their DID must use the same POP. Internal extension
-calling also requires the phones to be registered on the same server.
+1. Open `DID Numbers > Ring Group`.
+2. Select the option to create a new ring group.
+3. Set its description to `All Phones`.
+4. Leave Caller Announcement disabled unless the caller should hear one.
+5. Add every phone's SIP subaccount as a member.
+6. Give each member the same ring time, initially 30 seconds.
+7. Leave Answer Confirmation disabled for these SIP desk phones.
+8. Optionally select a shared voicemail box for unanswered calls.
+9. Create the group.
+
+## Phase 7: route all four DIDs to the ring group
+
+Repeat these steps for each of the four DIDs:
+
+1. Open `DID Numbers > Manage DIDs` and edit the DID.
+2. Set its POP to Houston 2.
+3. Set Routing to `Ring Group` and select `All Phones`.
+4. Review any Busy, Unreachable, or No Answer failover settings.
+5. Scroll to the bottom and apply the changes.
+
+Changing routing affects live incoming calls, so perform this phase during an
+agreed test window. It also replaces the temporary direct-to-pilot route.
+
+## Phase 8: acceptance test
+
+Call each of the four DIDs from an outside phone and record the result:
+
+| Test | Expected result |
+| --- | --- |
+| DID 1 through DID 4 | Every idle phone rings |
+| Answer on one phone | Other phones stop ringing |
+| Two-way audio | Both parties hear each other |
+| Caller hangs up | The phone releases the call |
+| No phone answers | Shared voicemail or chosen failover runs |
+| Internal extension | The selected phone rings directly |
+
+Answer at least one test call on each physical phone. If simultaneous inbound
+calls matter, also place two calls at once. Available concurrent calls depend
+on each DID's billing plan and channel capacity shown in the portal.
+
+All ring-group members and all four DIDs must use the same POP. Internal
+extension calling also requires the phones to be registered on the same
+server.
 
 ## If the pilot does not work
 
