@@ -7,7 +7,7 @@
   `houston2.voip.ms`.
 - The account has four inbound phone numbers (DIDs).
 - The cloud PBX is the PBX functionality hosted by VoIP.ms.
-- A call to any of the four DIDs should ring every physical phone together.
+- A call to any of the four DIDs should ring about 15 physical phones together.
 - Polycom SoundPoint IP550 phones can be configured manually for VoIP.ms.
 - The IP550 is not listed in VoIP.ms's current automatic-provisioning device
   list.
@@ -17,7 +17,7 @@
 ```text
 DID 1 --\
 DID 2 ---\
-DID 3 ----> "All Phones" ring group --> every phone subaccount
+DID 3 ----> "All Phones" queue --> every available phone subaccount
 DID 4 ---/
 ```
 
@@ -28,8 +28,9 @@ Do not send account or SIP passwords in chat, screenshots, or this repository.
 Create one unique SIP subaccount for each physical phone registered directly
 to VoIP.ms. Do not reuse one subaccount on several phones. Register every phone
 to `houston2.voip.ms`, and set all four incoming DIDs' POP to the same Houston
-2 server. Route all four DIDs to one ring group containing every phone's
-subaccount.
+2 server. Route all four DIDs to one Calling Queue using the `Ringall`
+strategy. Add every phone's subaccount as a static queue member with the same
+priority.
 
 The first four entries in a simple extension plan could be:
 
@@ -43,9 +44,10 @@ The first four entries in a simple extension plan could be:
 VoIP.ms adds the leading `10` to the value entered in its Internal Extension
 field. Test this plan with one phone before creating the remaining accounts.
 
-A VoIP.ms ring group supports up to eight SIP members. If there are more than
-eight physical phones, stop before creating the group and redesign the call
-distribution.
+A normal VoIP.ms ring group is not suitable because it permits only eight SIP
+members. VoIP.ms documents no fixed limit for static members in a Calling
+Queue, and its `Ringall` strategy rings every available member until one
+answers.
 
 ## Phase 1: inventory one pilot phone
 
@@ -135,40 +137,69 @@ subaccount, extension, and password for each physical phone. For each phone,
 confirm portal registration, echo-test audio, and outbound calling. Do not
 route a separate DID directly to each phone.
 
-## Phase 6: create the All Phones ring group
+## Phase 6: create the All Phones queue
 
 In the VoIP.ms portal:
 
-1. Open `DID Numbers > Ring Group`.
-2. Select the option to create a new ring group.
-3. Set its description to `All Phones`.
-4. Leave Caller Announcement disabled unless the caller should hear one.
-5. Add every phone's SIP subaccount as a member.
-6. Give each member the same ring time, initially 30 seconds.
-7. Leave Answer Confirmation disabled for these SIP desk phones.
-8. Optionally select a shared voicemail box for unanswered calls.
-9. Create the group.
+1. Open `DID Numbers > Calling Queues`.
+2. Select `Create New Call Queue`.
+3. Choose an unused Queue Number and name it `All Phones`.
+4. Leave Queue Password, Caller ID Prefix, Join Announcement, and Agent
+   Announcement blank initially.
+5. Set Ring Strategy to `Ringall`.
+6. Set Member Delay and Wrap-up Time to `0`.
+7. Set Agent Ring Timeout to about 25 seconds.
+8. Set Maximum Wait Time to about 30 seconds.
+9. Set Retry Timer to about 5 seconds.
+10. Configure callers to fail over when no members are registered or available.
+11. Set the Timeout and unavailable failovers to a shared voicemail box or the
+    customer's preferred fallback.
+12. Disable position and estimated-wait announcements for a simple
+    ring-every-phone experience.
+13. Select an acceptable hold sound. The queue starts billing when a call
+    enters it, and the caller may hear hold audio while phones ring.
+14. Save the queue.
 
-## Phase 7: route all four DIDs to the ring group
+The exact `Join when empty`, `Leave when empty`, and `Ring in-use` labels can
+be confusing. During the pilot, verify these outcomes rather than relying only
+on the labels:
+
+- an unregistered phone does not trap the caller in the queue;
+- a caller reaches voicemail after about 30 seconds with no answer; and
+- a phone already on a call is skipped unless call waiting is desired.
+
+## Phase 7: add static queue members
+
+1. Edit the static members for the `All Phones` queue.
+2. Add the pilot phone's subaccount and give it priority `0`.
+3. As each later phone is configured, add its unique subaccount with the same
+   priority.
+4. Do not require staff to log in and out. Static members participate whenever
+   their SIP subaccounts are registered.
+
+VoIP.ms allows as many static members as needed in a queue. Equal priority and
+the `Ringall` strategy make all available members ring together.
+
+## Phase 8: route all four DIDs to the queue
 
 Repeat these steps for each of the four DIDs:
 
 1. Open `DID Numbers > Manage DIDs` and edit the DID.
 2. Set its POP to Houston 2.
-3. Set Routing to `Ring Group` and select `All Phones`.
+3. Set Routing to `Calling Queue` and select `All Phones`.
 4. Review any Busy, Unreachable, or No Answer failover settings.
 5. Scroll to the bottom and apply the changes.
 
 Changing routing affects live incoming calls, so perform this phase during an
 agreed test window. It also replaces the temporary direct-to-pilot route.
 
-## Phase 8: acceptance test
+## Phase 9: acceptance test
 
 Call each of the four DIDs from an outside phone and record the result:
 
 | Test | Expected result |
 | --- | --- |
-| DID 1 through DID 4 | Every idle phone rings |
+| DID 1 through DID 4 | Every available phone rings |
 | Answer on one phone | Other phones stop ringing |
 | Two-way audio | Both parties hear each other |
 | Caller hangs up | The phone releases the call |
@@ -179,9 +210,8 @@ Answer at least one test call on each physical phone. If simultaneous inbound
 calls matter, also place two calls at once. Available concurrent calls depend
 on each DID's billing plan and channel capacity shown in the portal.
 
-All ring-group members and all four DIDs must use the same POP. Internal
-extension calling also requires the phones to be registered on the same
-server.
+All queue members and all four DIDs must use the same POP. Internal extension
+calling also requires the phones to be registered on the same server.
 
 ## If the pilot does not work
 
@@ -206,6 +236,7 @@ server.
 - [Phone setup](https://wiki.voip.ms/article/Polycom_SoundPoint_IP_501)
 - [DID troubleshooting](https://wiki.voip.ms/article/DID_Troubleshooting)
 - [VoIP.ms ring groups](https://wiki.voip.ms/article/Ring_Group)
+- [Calling queues](https://wiki.voip.ms/article/Calling_Queues)
 - [VoIP.ms emergency services](https://wiki.voip.ms/article/E911)
 - Poly Quick Tip 44011, *Registering Standalone Polycom SoundPoint IP,
   SoundStation IP, and VVX 1500 Phones* (available from HP Support)
