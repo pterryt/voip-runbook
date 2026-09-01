@@ -2,7 +2,6 @@
 
 ## What we know
 
-- The provider name appears to be **VoIP.ms**, not `void.ms`.
 - The requested point of presence (POP) is Houston 2, whose SIP server is
   `houston2.voip.ms`.
 - The account has four inbound phone numbers (DIDs).
